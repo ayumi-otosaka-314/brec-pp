@@ -27,6 +27,7 @@ func (c *cleaner) GetRemovables(ctx context.Context) (<-chan storage.Removable, 
 
 	r, err := c.driveService.Files.
 		List().
+		Q("mimeType != 'application/vnd.google-apps.folder'").
 		OrderBy("modifiedTime").
 		PageSize(5).
 		Fields("nextPageToken, files(id, name, size)").
