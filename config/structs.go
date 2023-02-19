@@ -3,33 +3,33 @@ package config
 import "time"
 
 type Root struct {
-	Server  Server
-	Discord Discord
-	Storage Storage
+	Server  Server  `mapstructure:"server" validate:"required"`
+	Discord Discord `mapstructure:"discord" validate:"required"`
+	Storage Storage `mapstructure:"storage" validate:"required"`
 }
 
 type Server struct {
-	ListenAddress string
-	Timeout       time.Duration
-	Paths         HandlerPaths
+	ListenAddress string        `mapstructure:"listenAddress" validate:"required"`
+	Timeout       time.Duration `mapstructure:"timeout" validate:"required,gt=0"`
+	Paths         HandlerPaths  `mapstructure:"paths" validate:"required"`
 }
 
 type HandlerPaths struct {
-	RecordUpload string
+	RecordUpload string `mapstructure:"recordUpload" validate:"required"`
 }
 
 type Discord struct {
-	WebhookURL string
+	WebhookURL string `mapstructure:"webhookUrl" validate:"required,url"`
 }
 
 type Storage struct {
-	RootPath    string
-	GoogleDrive GoogleDrive
+	RootPath    string      `mapstructure:"rootPath" validate:"required,dir"`
+	GoogleDrive GoogleDrive `mapstructure:"googleDrive" validate:"required"`
 }
 
 type GoogleDrive struct {
-	Timeout          time.Duration
-	CredentialPath   string
-	ReservedCapacity uint64
-	ParentFolderID   string
+	Timeout          time.Duration `mapstructure:"timeout" validate:"required,gt=0"`
+	CredentialPath   string        `mapstructure:"credentialPath" validate:"required,file"`
+	ReservedCapacity uint64        `mapstructure:"reservedCapacity" validate:"required"`
+	ParentFolderID   string        `mapstructure:"parentFolderId" validate:"required"`
 }
