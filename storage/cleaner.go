@@ -12,7 +12,7 @@ type Cleaner interface {
 }
 
 type Removable interface {
-	Remove() error
+	RemoveResult() <-chan error
 	OccupiedSize() uint64
 }
 
@@ -43,7 +43,7 @@ func doEnsureCapacity(cleanTarget uint64, cleaner Cleaner) error {
 	}
 
 	for removable := range removables {
-		if err = removable.Remove(); err != nil {
+		if err := <-removable.RemoveResult(); err != nil {
 			return errors.Wrap(err, "error removing object; stopping")
 		}
 
@@ -52,6 +52,5 @@ func doEnsureCapacity(cleanTarget uint64, cleaner Cleaner) error {
 			return nil
 		}
 	}
-
-	return errors.New("no removable left")
+	return nil
 }

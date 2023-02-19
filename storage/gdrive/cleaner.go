@@ -34,19 +34,21 @@ func (c *cleaner) GetRemovables(ctx context.Context) (<-chan storage.Removable, 
 	if err != nil {
 		return nil, err
 	}
+
 	result := make(chan storage.Removable)
 	go func() {
 		defer close(result)
 
 		for _, file := range r.Files {
+			removeResult := make(chan error)
 			select {
-			case result <- &removable{
-				driveService: c.driveService,
-				logger:       c.logger,
-				fileID:       file.Id,
-				name:         file.Name,
+			case result <- &removable{ // send result to downstream first, then perform action
+				removeResult: removeResult,
 				size:         uint64(file.Size),
 			}:
+				c.logger.Debug("deleting file from google drive",
+					zap.String("fileID", file.Id), zap.String("name", file.Name))
+				removeResult <- c.driveService.Files.Delete(file.Id).Do()
 			case <-ctx.Done():
 				return
 			}
@@ -56,17 +58,12 @@ func (c *cleaner) GetRemovables(ctx context.Context) (<-chan storage.Removable, 
 }
 
 type removable struct {
-	driveService *drive.Service
-	logger       *zap.Logger
-	fileID       string
-	name         string
+	removeResult <-chan error
 	size         uint64
 }
 
-func (r *removable) Remove() error {
-	r.logger.Debug("deleting file from google drive",
-		zap.String("fileID", r.fileID), zap.String("name", r.name))
-	return r.driveService.Files.Delete(r.fileID).Do()
+func (r *removable) RemoveResult() <-chan error {
+	return r.removeResult
 }
 
 func (r *removable) OccupiedSize() uint64 {
