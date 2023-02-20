@@ -88,22 +88,21 @@ func (s *service) Receive() chan<- *brec.EventDataFileClose {
 
 func (s *service) doReceive() {
 	for eventData := range s.receive {
-		go func(streamerName, relativePath string) {
-			if err := s.doUpload(streamerName, relativePath); err != nil {
-				s.logger.Error("error uploading file",
-					zap.String("streamerName", streamerName), zap.String("filePath", relativePath),
-					zap.Error(err))
+		go func(e *brec.EventDataFileClose) {
+			if err := s.doUpload(e.StreamerName, e.RelativePath, e.FileSize); err != nil {
+				s.logger.Error("error uploading file", zap.Error(err),
+					zap.String("streamerName", e.StreamerName), zap.String("filePath", e.RelativePath))
 				s.notifier.Alert(fmt.Sprintf(
 					"error uploading file [%s] for streamer [%s]",
-					relativePath, streamerName,
+					e.RelativePath, e.StreamerName,
 				), err)
 			}
-		}(eventData.StreamerName, eventData.RelativePath)
+		}(eventData)
 	}
 	s.logger.Warn("receive channel closed for google drive uploader")
 }
 
-func (s *service) doUpload(streamerName, relativePath string) error {
+func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) error {
 	start := time.Now()
 
 	ctx, _ := context.WithTimeout(context.Background(), s.timeout)
@@ -113,7 +112,7 @@ func (s *service) doUpload(streamerName, relativePath string) error {
 	}
 
 	if err = storage.EnsureCapacity(
-		s.reservedCapacity,
+		s.reservedCapacity+fileSize,
 		&cleaner{logger: s.logger, driveService: driveService},
 	); err != nil {
 		return errors.Wrap(err, "unable to ensure capacity")
