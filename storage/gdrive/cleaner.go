@@ -2,6 +2,7 @@ package gdrive
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -13,8 +14,9 @@ import (
 // cleaner implements storage.Cleaner.
 // It is used to clear old recordings on Google Drive to ensure capacity before uploading.
 type cleaner struct {
-	logger       *zap.Logger
-	driveService *drive.Service
+	logger         *zap.Logger
+	driveService   *drive.Service
+	parentFolderID string
 }
 
 func (c *cleaner) GetAvailableCapacity() (uint64, error) {
@@ -29,7 +31,10 @@ func (c *cleaner) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, e
 
 	r, err := c.driveService.Files.
 		List().
-		Q("mimeType != 'application/vnd.google-apps.folder'").
+		Q(fmt.Sprintf(
+			"mimeType != 'application/vnd.google-apps.folder' and '%s' in parents",
+			c.parentFolderID,
+		)).
 		OrderBy("modifiedTime").
 		PageSize(10).
 		Fields("files(id, name, size)").
