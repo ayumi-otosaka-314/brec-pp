@@ -25,7 +25,6 @@ func (s *Service) GetAvailableCapacity() (uint64, error) {
 }
 
 func (s *Service) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, error) {
-	result := make(chan storage.DoRemove)
-
-	return result, nil
+	//TODO implement me
+	panic("implement me")
 }
