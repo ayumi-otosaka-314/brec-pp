@@ -198,7 +198,7 @@ func (n *notifier) onMessage(ctx context.Context, message *webhookMessage) error
 
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNoContent {
 		n.logger.Error("error sending message to discord webhook",
-			zap.String("response status", response.Status),
+			zap.String("responseStatus", response.Status),
 			func() zapcore.Field {
 				if rb, err := io.ReadAll(response.Body); err != nil {
 					return zap.Error(err)

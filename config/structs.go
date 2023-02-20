@@ -29,7 +29,7 @@ type ServiceEntry struct {
 
 type StreamerServiceEntry struct {
 	RoomID       uint64 `mapstructure:"roomId" validate:"required,gt=0"`
-	ServiceEntry `mapstructure:",squash"`
+	ServiceEntry `mapstructure:",squash" validate:"required"`
 }
 
 type Discord struct {
