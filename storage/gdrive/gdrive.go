@@ -60,7 +60,7 @@ func NewUploadService(
 func fromServiceAccount(credentialPath string) (*jwt.Config, error) {
 	b, err := os.ReadFile(credentialPath)
 	if err != nil {
-		return nil, errors.Wrap(err, "error reading credential file")
+		return nil, errors.Wrap(err, "error reading credential file at "+credentialPath)
 	}
 	var c = struct {
 		PrivateKeyID string `json:"private_key_id"`
@@ -78,8 +78,6 @@ func fromServiceAccount(credentialPath string) (*jwt.Config, error) {
 		Scopes:       []string{drive.DriveScope},
 		TokenURL:     c.TokenURI,
 	}, nil
-	//client := config.Client(context.Background())
-	//return client
 }
 
 func (s *service) Receive() chan<- *brec.EventDataFileClose {

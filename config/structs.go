@@ -3,9 +3,8 @@ package config
 import "time"
 
 type Root struct {
-	Server  Server  `mapstructure:"server" validate:"required"`
-	Discord Discord `mapstructure:"discord" validate:"required"`
-	Storage Storage `mapstructure:"storage" validate:"required"`
+	Server   Server          `mapstructure:"server" validate:"required"`
+	Services ServiceRegistry `mapstructure:"services" validate:"required"`
 }
 
 type Server struct {
@@ -16,6 +15,21 @@ type Server struct {
 
 type HandlerPaths struct {
 	RecordUpload string `mapstructure:"recordUpload" validate:"required"`
+}
+
+type ServiceRegistry struct {
+	Default   ServiceEntry           `mapstructure:"default" validate:"required"`
+	Streamers []StreamerServiceEntry `mapstructure:"streamers"`
+}
+
+type ServiceEntry struct {
+	Discord Discord `mapstructure:"discord" validate:"required"`
+	Storage Storage `mapstructure:"storage" validate:"required"`
+}
+
+type StreamerServiceEntry struct {
+	RoomID       uint64 `mapstructure:"roomId" validate:"required,gt=0"`
+	ServiceEntry `mapstructure:",squash"`
 }
 
 type Discord struct {

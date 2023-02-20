@@ -12,6 +12,7 @@ import (
 
 	"github.com/ayumi-otosaka-314/brec-pp/brec"
 	"github.com/ayumi-otosaka-314/brec-pp/storage"
+	"github.com/ayumi-otosaka-314/brec-pp/storage/localdrive"
 )
 
 const testWebhook = "REPLACE_WITH_TEST_WEBHOOK"
@@ -22,7 +23,7 @@ func Test_notifier_OnRecordStart(t *testing.T) {
 	n := &notifier{
 		logger:     logger,
 		webhookURL: testWebhook,
-		storageSvc: storage.NewService("."),
+		storageSvc: localdrive.NewService("."),
 		client:     http.DefaultClient,
 	}
 

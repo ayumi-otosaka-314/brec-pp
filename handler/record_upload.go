@@ -9,15 +9,13 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ayumi-otosaka-314/brec-pp/brec"
-	"github.com/ayumi-otosaka-314/brec-pp/notification"
-	"github.com/ayumi-otosaka-314/brec-pp/upload"
+	"github.com/ayumi-otosaka-314/brec-pp/streamer"
 )
 
 func NewNotifyRecordUploadHandler(
 	logger *zap.Logger,
 	timeout time.Duration,
-	notifier notification.Service,
-	uploader upload.Service,
+	streamerServiceRegistry streamer.ServiceRegistry,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rootCtx, _ := context.WithTimeout(context.Background(), timeout)
@@ -51,7 +49,9 @@ func NewNotifyRecordUploadHandler(
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			err = notifier.OnRecordStart(rootCtx, eventTime, eventData)
+			err = streamerServiceRegistry.
+				GetNotifier(eventData.RoomID).
+				OnRecordStart(rootCtx, eventTime, eventData)
 		case brec.EventTypeFileClosed:
 			eventData := &brec.EventDataFileClose{}
 			if err = jsoniter.Unmarshal(event.Data, eventData); err != nil {
@@ -59,10 +59,15 @@ func NewNotifyRecordUploadHandler(
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			err = notifier.OnRecordFinish(rootCtx, eventTime, eventData)
+			if err = streamerServiceRegistry.
+				GetNotifier(eventData.RoomID).
+				OnRecordFinish(rootCtx, eventTime, eventData); err != nil {
+				logger.Warn("error notifying on record finish; continue to upload", zap.Error(err))
+			}
 
 			select {
-			case uploader.Receive() <- eventData:
+			case streamerServiceRegistry.GetUploader(eventData.RoomID).Receive() <- eventData:
+				err = nil
 			case <-rootCtx.Done():
 				err = rootCtx.Err()
 			}
