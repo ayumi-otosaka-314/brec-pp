@@ -18,13 +18,12 @@ import (
 	"github.com/ayumi-otosaka-314/brec-pp/brec"
 	"github.com/ayumi-otosaka-314/brec-pp/notification"
 	"github.com/ayumi-otosaka-314/brec-pp/storage"
-	"github.com/ayumi-otosaka-314/brec-pp/storage/localdrive"
 )
 
 func NewNotifier(
 	logger *zap.Logger,
 	webhookURL string,
-	storageSvc *localdrive.Service,
+	storageSvc storage.Service,
 ) notification.Service {
 	return &notifier{
 		logger:     logger,
@@ -37,7 +36,7 @@ func NewNotifier(
 type notifier struct {
 	logger     *zap.Logger
 	webhookURL string
-	storageSvc *localdrive.Service
+	storageSvc storage.Service
 	client     *http.Client
 }
 

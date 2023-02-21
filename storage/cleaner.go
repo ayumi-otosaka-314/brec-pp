@@ -6,8 +6,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Cleaner interface {
+type Service interface {
 	GetAvailableCapacity() (uint64, error)
+}
+
+type Cleaner interface {
+	Service
 	GetRemovables(context.Context) (<-chan DoRemove, error)
 }
 
@@ -15,7 +19,7 @@ type Cleaner interface {
 // It would return the space cleared in byte count, and error if any during cleaning.
 type DoRemove func() (uint64, error)
 
-func EnsureCapacity(targetCapacity uint64, cleaner Cleaner) error {
+func EnsureCapacity(ctx context.Context, targetCapacity uint64, cleaner Cleaner) error {
 	const allowedIterations = 5
 	for i := 0; i < allowedIterations; i++ {
 		availCapacity, err := cleaner.GetAvailableCapacity()
@@ -27,15 +31,15 @@ func EnsureCapacity(targetCapacity uint64, cleaner Cleaner) error {
 			return nil
 		}
 
-		if err = doEnsureCapacity(targetCapacity-availCapacity, cleaner); err != nil {
+		if err = doEnsureCapacity(ctx, targetCapacity-availCapacity, cleaner); err != nil {
 			return err
 		}
 	}
 	return errors.Errorf("unable to ensure capacity in [%d] iterations", allowedIterations)
 }
 
-func doEnsureCapacity(cleanTarget uint64, cleaner Cleaner) error {
-	ctx, cancel := context.WithCancel(context.Background())
+func doEnsureCapacity(parentCtx context.Context, cleanTarget uint64, cleaner Cleaner) error {
+	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
 	removables, err := cleaner.GetRemovables(ctx)

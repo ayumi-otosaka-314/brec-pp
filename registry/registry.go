@@ -73,7 +73,7 @@ type serviceEntry struct {
 }
 
 func (r *Registry) newServiceEntry(conf config.ServiceEntry) *serviceEntry {
-	localStorage := localdrive.NewService(conf.Storage.RootPath)
+	localStorage := localdrive.New(conf.Storage.RootPath)
 	notifier := discord.NewNotifier(
 		r.logger,
 		conf.Discord.WebhookURL,

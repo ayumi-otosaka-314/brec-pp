@@ -110,6 +110,7 @@ func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) e
 	}
 
 	if err = storage.EnsureCapacity(
+		ctx,
 		s.reservedCapacity+fileSize,
 		&cleaner{
 			logger:         s.logger,
