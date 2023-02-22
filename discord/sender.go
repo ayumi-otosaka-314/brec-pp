@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/ayumi-otosaka-314/brec-pp/brec"
 	"github.com/ayumi-otosaka-314/brec-pp/notification"
 	"github.com/ayumi-otosaka-314/brec-pp/storage"
+	"github.com/ayumi-otosaka-314/brec-pp/streamer"
 )
 
 func NewNotifier(
@@ -25,45 +27,69 @@ func NewNotifier(
 	webhookURL string,
 	storageSvc storage.Service,
 ) notification.Service {
+	updateQueue := make(chan *updateMessage, 32)
+	go func() {
+		for updateMsg := range updateQueue {
+			logger.Warn("message to be updated",
+				zap.Uint64("roomID", updateMsg.roomID),
+				zap.String("sessionID", updateMsg.sessionID),
+				zap.String("messageID", updateMsg.messageID),
+			)
+		}
+	}()
+
+	webhook, err := url.Parse(webhookURL)
+	if err != nil {
+		panic(err)
+	}
+	webhook.Query().Set("wait", "true")
+
 	return &notifier{
-		logger:     logger,
-		webhookURL: webhookURL,
-		storageSvc: storageSvc,
-		client:     http.DefaultClient,
+		logger:      logger,
+		webhookURL:  webhook.String(),
+		storageSvc:  storageSvc,
+		client:      http.DefaultClient,
+		updateQueue: updateQueue,
 	}
 }
 
 type notifier struct {
-	logger     *zap.Logger
-	webhookURL string
-	storageSvc storage.Service
-	client     *http.Client
+	logger               *zap.Logger
+	webhookURL           string
+	storageSvc           storage.Service
+	client               *http.Client
+	updateQueue          chan *updateMessage
+	streamerMetaRegistry streamer.MetaRegistry
 }
+
+const (
+	pocAvatar = "https://i2.hdslb.com/bfs/face/75ccf0dfbf9a4e56ee8d62115465f467f7e953aa.jpg"
+)
 
 func (n *notifier) OnRecordStart(
 	ctx context.Context,
 	eventTime time.Time,
 	eventData *brec.EventDataSession,
 ) error {
-	return n.onMessage(
-		ctx,
-		&webhookMessage{
-			Embeds: []*webhookMessageEmbed{{
-				Title: fmt.Sprintf("[%s] recording started", eventData.StreamerName),
-				Type:  webhookEmbedType,
-				Description: fmt.Sprintf(
-					"Recording livestream [%s] from streamer [%s]",
-					eventData.Title, eventData.StreamerName,
-				),
-				Timestamp: eventTime.Format(time.RFC3339),
-				Color:     0x0099FF,
-				Fields: []*webhookMessageEmbedField{{
-					Name:  "Available Space on Recoder",
-					Value: n.safeGetAvailableCapacity(),
-				}},
+	message := &webhookMessage{
+		Embeds: []*messageEmbed{{
+			Author: &messageEmbedAuthor{
+				Name: eventData.StreamerName,
+				URL:  fmt.Sprintf("https://live.bilibili.com/%d", eventData.RoomID),
+			},
+			Title:       "Recording started",
+			Type:        webhookEmbedType,
+			Description: eventData.Title,
+			Thumbnail:   &messageEmbedThumbnail{URL: pocAvatar},
+			Timestamp:   eventTime.Format(time.RFC3339),
+			Color:       0x0099FF,
+			Fields: []*messageEmbedField{{
+				Name:  "Available Space on Recoder",
+				Value: n.safeGetAvailableCapacity(),
 			}},
-		},
-	)
+		}},
+	}
+	return n.onMessage(ctx, message, eventData.RoomID, eventData.SessionID)
 }
 
 func (n *notifier) safeGetAvailableCapacity() string {
@@ -75,82 +101,85 @@ func (n *notifier) safeGetAvailableCapacity() string {
 	return fmt.Sprintf("%.3f GB", float64(availSpace)/storage.GigaBytes)
 }
 
-func (n *notifier) OnRecordFinish(
+func (n *notifier) OnRecordReady(
 	ctx context.Context,
 	eventTime time.Time,
 	eventData *brec.EventDataFileClose,
 ) error {
-	return n.onMessage(
-		ctx,
-		&webhookMessage{
-			Embeds: []*webhookMessageEmbed{{
-				Title: fmt.Sprintf("[%s] recording file ready", eventData.StreamerName),
-				Type:  webhookEmbedType,
-				Description: fmt.Sprintf(
-					"Recording file for livestream [%s] from streamer [%s] is ready\nUploading now...",
-					eventData.Title, eventData.StreamerName,
-				),
-				Timestamp: eventTime.Format(time.RFC3339),
-				Color:     0x00FF99,
-				Fields: []*webhookMessageEmbedField{
-					{
-						Name:  "File Name",
-						Value: path.Base(eventData.RelativePath),
-					},
-					{
-						Name:   "File Size",
-						Value:  fmt.Sprintf("%.3f GB", float64(eventData.FileSize)/storage.GigaBytes),
-						Inline: true,
-					},
-					{
-						Name:   "Recording Duration",
-						Value:  time.Duration(eventData.Duration * float64(time.Second)).String(),
-						Inline: true,
-					},
+	message := &webhookMessage{
+		Embeds: []*messageEmbed{{
+			Author: &messageEmbedAuthor{
+				Name: eventData.StreamerName,
+				URL:  fmt.Sprintf("https://live.bilibili.com/%d", eventData.RoomID),
+			},
+			Title: "Recording file ready for upload",
+			Type:  webhookEmbedType,
+			Description: fmt.Sprintf(
+				"Recording file of livestream [%s] is ready\nUploading now...",
+				eventData.Title,
+			),
+			Thumbnail: &messageEmbedThumbnail{URL: pocAvatar},
+			Timestamp: eventTime.Format(time.RFC3339),
+			Color:     0x00FF99,
+			Fields: []*messageEmbedField{
+				{
+					Name:  "File Name",
+					Value: path.Base(eventData.RelativePath),
 				},
-			}},
-		},
-	)
+				{
+					Name:   "File Size",
+					Value:  fmt.Sprintf("%.3f GB", float64(eventData.FileSize)/storage.GigaBytes),
+					Inline: true,
+				},
+				{
+					Name:   "Recording Duration",
+					Value:  time.Duration(eventData.Duration * float64(time.Second)).String(),
+					Inline: true,
+				},
+			},
+		}},
+	}
+	return n.onMessage(ctx, message, eventData.RoomID, eventData.SessionID)
 }
 
 func (n *notifier) OnUploadComplete(
 	ctx context.Context,
 	timestamp time.Time,
+	eventData *brec.EventDataFileClose,
 	uploadDuration time.Duration,
-	streamerName string,
-	fileName string,
 ) error {
-	return n.onMessage(
-		ctx,
-		&webhookMessage{
-			Embeds: []*webhookMessageEmbed{{
-				Title: fmt.Sprintf("[%s] upload completed", streamerName),
-				Type:  webhookEmbedType,
-				Description: fmt.Sprintf(
-					"Completed uploading livestream recording from streamer [%s]", streamerName,
-				),
-				Timestamp: timestamp.Format(time.RFC3339),
-				Color:     0x99FF00,
-				Fields: []*webhookMessageEmbedField{
-					{
-						Name:  "File Name",
-						Value: path.Base(fileName),
-					},
-					{
-						Name:  "Upload Duration",
-						Value: uploadDuration.String(),
-					},
+	message := &webhookMessage{
+		Embeds: []*messageEmbed{{
+			Author: &messageEmbedAuthor{
+				Name: eventData.StreamerName,
+				URL:  fmt.Sprintf("https://live.bilibili.com/%d", eventData.RoomID),
+			},
+			Title:     "Upload completed",
+			Type:      webhookEmbedType,
+			Thumbnail: &messageEmbedThumbnail{URL: pocAvatar},
+			Timestamp: timestamp.Format(time.RFC3339),
+			Color:     0x99FF00,
+			Fields: []*messageEmbedField{
+				{
+					Name:  "File Name",
+					Value: path.Base(eventData.RelativePath),
 				},
-			}},
-		},
-	)
+				{
+					Name:  "Upload Duration",
+					Value: uploadDuration.String(),
+				},
+			},
+		}},
+	}
+	return n.onMessage(ctx, message, eventData.RoomID, eventData.SessionID)
+
 }
 
 func (n *notifier) Alert(msg string, err error) {
 	if err := n.onMessage(
 		context.Background(),
 		&webhookMessage{
-			Embeds: []*webhookMessageEmbed{{
+			Embeds: []*messageEmbed{{
 				Title: fmt.Sprintf("[Alert]"),
 				Type:  webhookEmbedType,
 				Description: strings.Join([]string{
@@ -159,7 +188,7 @@ func (n *notifier) Alert(msg string, err error) {
 				}, "\n"),
 				Timestamp: time.Now().Format(time.RFC3339),
 				Color:     0xFF0099,
-				Fields: []*webhookMessageEmbedField{
+				Fields: []*messageEmbedField{
 					{
 						Name:  "Error Message",
 						Value: err.Error(),
@@ -167,12 +196,18 @@ func (n *notifier) Alert(msg string, err error) {
 				},
 			}},
 		},
+		0, "",
 	); err != nil {
 		n.logger.Error("error send alert to discord", zap.Error(err))
 	}
 }
 
-func (n *notifier) onMessage(ctx context.Context, message *webhookMessage) error {
+func (n *notifier) onMessage(
+	ctx context.Context,
+	message *webhookMessage,
+	roomID uint64,
+	sessionID string,
+) error {
 	raw, err := jsoniter.Marshal(message)
 	if err != nil {
 		return errors.Wrap(err, "error marshaling message")
@@ -189,17 +224,17 @@ func (n *notifier) onMessage(ctx context.Context, message *webhookMessage) error
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	response, err := n.client.Do(req)
+	resp, err := n.client.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "error sending message to discord webhook")
 	}
-	defer response.Body.Close()
+	defer resp.Body.Close()
 
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		n.logger.Error("error sending message to discord webhook",
-			zap.String("responseStatus", response.Status),
+			zap.String("responseStatus", resp.Status),
 			func() zapcore.Field {
-				if rb, err := io.ReadAll(response.Body); err != nil {
+				if rb, err := io.ReadAll(resp.Body); err != nil {
 					return zap.Error(err)
 				} else {
 					return zap.String("response body", string(rb))
@@ -207,6 +242,23 @@ func (n *notifier) onMessage(ctx context.Context, message *webhookMessage) error
 			}(),
 		)
 		return errors.New("error sending message to discord webhook")
+	}
+
+	response := &webhookResponse{}
+	if err = jsoniter.NewDecoder(resp.Body).Decode(resp); err != nil {
+		n.logger.Error("unable to decode discord webhook response body")
+		return nil
+	}
+
+	select {
+	case n.updateQueue <- &updateMessage{
+		roomID:    roomID,
+		sessionID: sessionID,
+		messageID: response.ID,
+		message:   message,
+	}:
+	case <-ctx.Done():
+		n.logger.Error("error updating message", zap.Error(ctx.Err()))
 	}
 	return nil
 }

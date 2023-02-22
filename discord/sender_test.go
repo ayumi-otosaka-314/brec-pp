@@ -47,7 +47,7 @@ func Test_notifier_OnRecordFinish(t *testing.T) {
 		client:     http.DefaultClient,
 	}
 
-	assert.NoError(t, n.OnRecordFinish(
+	assert.NoError(t, n.OnRecordReady(
 		context.Background(),
 		time.Now(),
 		&brec.EventDataFileClose{

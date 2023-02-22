@@ -61,7 +61,7 @@ func NewNotifyRecordUploadHandler(
 			}
 			if err = streamerServiceRegistry.
 				GetNotifier(eventData.RoomID).
-				OnRecordFinish(rootCtx, eventTime, eventData); err != nil {
+				OnRecordReady(rootCtx, eventTime, eventData); err != nil {
 				logger.Warn("error notifying on record finish; continue to upload", zap.Error(err))
 			}
 

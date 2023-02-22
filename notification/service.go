@@ -9,13 +9,7 @@ import (
 
 type Service interface {
 	OnRecordStart(context.Context, time.Time, *brec.EventDataSession) error
-	OnRecordFinish(context.Context, time.Time, *brec.EventDataFileClose) error
-	OnUploadComplete(
-		context context.Context,
-		timestamp time.Time,
-		uploadDuration time.Duration,
-		streamerName string,
-		fileName string,
-	) error
+	OnRecordReady(context.Context, time.Time, *brec.EventDataFileClose) error
+	OnUploadComplete(context.Context, time.Time, *brec.EventDataFileClose, time.Duration) error
 	Alert(string, error)
 }
