@@ -23,7 +23,7 @@ import (
 func NewNotifier(
 	logger *zap.Logger,
 	webhookURL string,
-	storageSvc *storage.Service,
+	storageSvc storage.Service,
 ) notification.Service {
 	return &notifier{
 		logger:     logger,
@@ -36,7 +36,7 @@ func NewNotifier(
 type notifier struct {
 	logger     *zap.Logger
 	webhookURL string
-	storageSvc *storage.Service
+	storageSvc storage.Service
 	client     *http.Client
 }
 
@@ -59,17 +59,17 @@ func (n *notifier) OnRecordStart(
 				Color:     0x0099FF,
 				Fields: []*webhookMessageEmbedField{{
 					Name:  "Available Space on Recoder",
-					Value: n.safeGetAvailableSpace(),
+					Value: n.safeGetAvailableCapacity(),
 				}},
 			}},
 		},
 	)
 }
 
-func (n *notifier) safeGetAvailableSpace() string {
-	availSpace, err := n.storageSvc.GetAvailableSpace()
+func (n *notifier) safeGetAvailableCapacity() string {
+	availSpace, err := n.storageSvc.GetAvailableCapacity()
 	if err != nil {
-		n.logger.Error("error getting available space", zap.Error(err))
+		n.logger.Error("error getting available capacity", zap.Error(err))
 		return "error"
 	}
 	return fmt.Sprintf("%.3f GB", float64(availSpace)/storage.GigaBytes)
@@ -197,7 +197,7 @@ func (n *notifier) onMessage(ctx context.Context, message *webhookMessage) error
 
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNoContent {
 		n.logger.Error("error sending message to discord webhook",
-			zap.String("response status", response.Status),
+			zap.String("responseStatus", response.Status),
 			func() zapcore.Field {
 				if rb, err := io.ReadAll(response.Body); err != nil {
 					return zap.Error(err)

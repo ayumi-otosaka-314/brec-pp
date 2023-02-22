@@ -21,6 +21,6 @@ func NewServer(logger *zap.Logger, listenAddr string, mux *http.ServeMux) *Serve
 }
 
 func (s *Server) Serve() {
-	s.logger.Info("starting server", zap.String("ListenAddress", s.listenAddr))
-	s.logger.Warn("Shutting down server", zap.Error(http.ListenAndServe(s.listenAddr, s.mux)))
+	s.logger.Info("starting server", zap.String("listenAddress", s.listenAddr))
+	s.logger.Warn("shutting down server", zap.Error(http.ListenAndServe(s.listenAddr, s.mux)))
 }

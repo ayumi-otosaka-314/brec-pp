@@ -23,14 +23,14 @@ import (
 )
 
 type service struct {
-	logger               *zap.Logger
-	config               *jwt.Config
-	timeout              time.Duration
-	reservedCapacity     uint64
-	gdriveParentFolderID string
-	localRootPath        string
-	notifier             notification.Service
-	receive              chan *brec.EventDataFileClose
+	logger           *zap.Logger
+	config           *jwt.Config
+	timeout          time.Duration
+	reservedCapacity uint64
+	parentFolderID   string
+	localRootPath    string
+	notifier         notification.Service
+	receive          chan *brec.EventDataFileClose
 }
 
 func NewUploadService(
@@ -44,14 +44,14 @@ func NewUploadService(
 		panic(err)
 	}
 	svc := &service{
-		logger:               logger,
-		config:               conf,
-		timeout:              gdriveConfig.Timeout,
-		reservedCapacity:     gdriveConfig.ReservedCapacity,
-		gdriveParentFolderID: gdriveConfig.ParentFolderID,
-		localRootPath:        localRootPath,
-		notifier:             notifier,
-		receive:              make(chan *brec.EventDataFileClose, 16),
+		logger:           logger,
+		config:           conf,
+		timeout:          gdriveConfig.Timeout,
+		reservedCapacity: gdriveConfig.ReservedCapacity,
+		parentFolderID:   gdriveConfig.ParentFolderID,
+		localRootPath:    localRootPath,
+		notifier:         notifier,
+		receive:          make(chan *brec.EventDataFileClose, 16),
 	}
 	go svc.doReceive()
 	return svc
@@ -60,7 +60,7 @@ func NewUploadService(
 func fromServiceAccount(credentialPath string) (*jwt.Config, error) {
 	b, err := os.ReadFile(credentialPath)
 	if err != nil {
-		return nil, errors.Wrap(err, "error reading credential file")
+		return nil, errors.Wrap(err, "error reading credential file at "+credentialPath)
 	}
 	var c = struct {
 		PrivateKeyID string `json:"private_key_id"`
@@ -78,8 +78,6 @@ func fromServiceAccount(credentialPath string) (*jwt.Config, error) {
 		Scopes:       []string{drive.DriveScope},
 		TokenURL:     c.TokenURI,
 	}, nil
-	//client := config.Client(context.Background())
-	//return client
 }
 
 func (s *service) Receive() chan<- *brec.EventDataFileClose {
@@ -112,8 +110,13 @@ func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) e
 	}
 
 	if err = storage.EnsureCapacity(
+		ctx,
 		s.reservedCapacity+fileSize,
-		&cleaner{logger: s.logger, driveService: driveService},
+		&cleaner{
+			logger:         s.logger,
+			driveService:   driveService,
+			parentFolderID: s.parentFolderID,
+		},
 	); err != nil {
 		return errors.Wrap(err, "unable to ensure capacity")
 	}
@@ -126,7 +129,7 @@ func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) e
 	if _, err = driveService.Files.
 		Create(&drive.File{
 			Name:    fileName,
-			Parents: []string{s.gdriveParentFolderID}},
+			Parents: []string{s.parentFolderID}},
 		).
 		Media(uploadFile).
 		ProgressUpdater(s.logUploadProgress(fileName)).
