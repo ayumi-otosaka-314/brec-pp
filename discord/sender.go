@@ -247,7 +247,7 @@ func (n *notifier) onMessage(
 	}
 
 	response := &webhookResponse{}
-	if err = jsoniter.NewDecoder(resp.Body).Decode(resp); err != nil {
+	if err = jsoniter.NewDecoder(resp.Body).Decode(response); err != nil {
 		n.logger.Error("unable to decode discord webhook response body", zap.Error(err))
 		return nil
 	}

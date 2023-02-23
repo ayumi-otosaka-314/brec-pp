@@ -53,19 +53,20 @@ type messageEmbedField struct {
 }
 
 type webhookResponse struct {
-	ID        string `json:"id"`
-	Type      uint8  `json:"type"`
-	ChannelID string `json:"channel_id"`
+	ID              string         `json:"id"`
+	Type            uint8          `json:"type"`
+	ChannelID       string         `json:"channel_id"`
+	Author          *messageAuthor `json:"author"`
+	Timestamp       string         `json:"timestamp"`
+	EditedTimestamp string         `json:"edited_timestamp"`
+	Flags           uint8          `json:"flags"`
+	WebhookID       string         `json:"webhook_id"`
 }
 
 type messageAuthor struct {
-	IsBot           bool   `json:"bot"`
-	ID              string `json:"id"`
-	Username        string `json:"username"`
-	Avatar          string `json:"avatar"`
-	Discriminator   string `json:"discriminator"`
-	Timestamp       string `json:"timestamp"`
-	EditedTimestamp string `json:"edited_timestamp"`
-	Flags           uint8  `json:"flags"`
-	WebhookID       string `json:"webhook_id"`
+	IsBot         bool   `json:"bot"`
+	ID            string `json:"id"`
+	Username      string `json:"username"`
+	Avatar        string `json:"avatar"`
+	Discriminator string `json:"discriminator"`
 }
