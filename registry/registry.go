@@ -29,7 +29,15 @@ func New(conf *config.Root) *Registry {
 }
 
 func NewLogger() *zap.Logger {
-	logger, _ := zap.NewProduction()
+	cfg := zap.NewProductionConfig()
+	cfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	logger, err := cfg.Build(
+		zap.AddStacktrace(zap.WarnLevel),
+		zap.AddCaller(),
+	)
+	if err != nil {
+		panic(err)
+	}
 	return logger
 }
 
