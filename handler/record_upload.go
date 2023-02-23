@@ -3,12 +3,16 @@ package handler
 import (
 	"context"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 
 	"github.com/ayumi-otosaka-314/brec-pp/brec"
+	"github.com/ayumi-otosaka-314/brec-pp/storage"
+	"github.com/ayumi-otosaka-314/brec-pp/storage/localdrive"
 	"github.com/ayumi-otosaka-314/brec-pp/streamer"
 )
 
@@ -49,9 +53,30 @@ func NewNotifyRecordUploadHandler(
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+
 			err = streamerServiceRegistry.
 				GetNotifier(eventData.RoomID).
 				OnRecordStart(rootCtx, eventTime, eventData)
+		case brec.EventTypeFileOpening:
+			eventData := &brec.EventDataFileOpen{}
+			if err = jsoniter.Unmarshal(event.Data, eventData); err != nil {
+				logger.Warn("error unmarshalling event data", zap.Error(err))
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			go func(e *brec.EventDataFileOpen) {
+				ctx, _ := context.WithTimeout(context.Background(), 10*time.Minute)
+				if err := storage.EnsureCapacity(
+					localdrive.WithTraverseDepth(ctx, strings.Count(e.RelativePath, string(os.PathSeparator))),
+					uint64(5*storage.GigaBytes),
+					streamerServiceRegistry.GetLocalStorage(eventData.RoomID),
+				); err != nil {
+					logger.Error("error cleaning local storage", zap.Error(err))
+					streamerServiceRegistry.GetNotifier(eventData.RoomID).
+						Alert("error cleaning local storage", err)
+				}
+			}(eventData)
 		case brec.EventTypeFileClosed:
 			eventData := &brec.EventDataFileClose{}
 			if err = jsoniter.Unmarshal(event.Data, eventData); err != nil {
@@ -59,6 +84,7 @@ func NewNotifyRecordUploadHandler(
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			
 			if err = streamerServiceRegistry.
 				GetNotifier(eventData.RoomID).
 				OnRecordReady(rootCtx, eventTime, eventData); err != nil {
