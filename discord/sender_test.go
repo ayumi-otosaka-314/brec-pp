@@ -23,7 +23,7 @@ func Test_notifier_OnRecordStart(t *testing.T) {
 	n := &notifier{
 		logger:     logger,
 		webhookURL: testWebhook,
-		storageSvc: localdrive.New("."),
+		storageSvc: localdrive.New(logger, "."),
 		client:     http.DefaultClient,
 	}
 

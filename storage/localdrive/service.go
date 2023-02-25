@@ -19,8 +19,8 @@ type service struct {
 	logger   *zap.Logger
 }
 
-func New(rootPath string) storage.Cleaner {
-	return &service{rootPath: rootPath}
+func New(logger *zap.Logger, rootPath string) storage.Cleaner {
+	return &service{rootPath: rootPath, logger: logger}
 }
 
 func (s *service) GetAvailableCapacity() (uint64, error) {
