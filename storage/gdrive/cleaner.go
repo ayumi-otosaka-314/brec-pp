@@ -57,6 +57,7 @@ func (c *cleaner) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, e
 			case result <- doRemove:
 				continue
 			case <-ctx.Done():
+				c.logger.Debug("google drive get removable finished", zap.Error(ctx.Err()))
 				return
 			}
 		}

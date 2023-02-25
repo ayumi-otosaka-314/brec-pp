@@ -147,28 +147,28 @@ func (n *notifier) OnUploadComplete(
 }
 
 func (n *notifier) Alert(msg string, err error) {
-	if err := n.onMessage(
+	if sendErr := n.onMessage(
 		context.Background(),
 		&webhookMessage{
 			Embeds: []*webhookMessageEmbed{{
 				Title: fmt.Sprintf("[Alert]"),
 				Type:  webhookEmbedType,
 				Description: strings.Join([]string{
-					"error happened in brec-pp",
+					"error happened in brec-pp:",
 					msg,
 				}, "\n"),
 				Timestamp: time.Now().Format(time.RFC3339),
 				Color:     0xFF0099,
 				Fields: []*webhookMessageEmbedField{
 					{
-						Name:  "Error Message",
+						Name:  "Error",
 						Value: err.Error(),
 					},
 				},
 			}},
 		},
-	); err != nil {
-		n.logger.Error("error send alert to discord", zap.Error(err))
+	); sendErr != nil {
+		n.logger.Error("error send alert to discord", zap.Error(sendErr))
 	}
 }
 
