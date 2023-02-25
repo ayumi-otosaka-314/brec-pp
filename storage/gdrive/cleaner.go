@@ -48,6 +48,7 @@ func (c *cleaner) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, e
 		defer close(result)
 
 		for _, file := range r.Files {
+			file := file
 			doRemove := func() (uint64, error) {
 				c.logger.Debug("deleting file from google drive",
 					zap.String("name", file.Name), zap.String("fileID", file.Id))

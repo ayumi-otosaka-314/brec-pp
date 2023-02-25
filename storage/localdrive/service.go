@@ -19,8 +19,8 @@ type service struct {
 	logger   *zap.Logger
 }
 
-func New(rootPath string) storage.Cleaner {
-	return &service{rootPath: rootPath}
+func New(logger *zap.Logger, rootPath string) storage.Cleaner {
+	return &service{rootPath: rootPath, logger: logger}
 }
 
 func (s *service) GetAvailableCapacity() (uint64, error) {
@@ -52,8 +52,11 @@ func (s *service) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, e
 		defer close(result)
 
 		for _, entry := range entries {
+			entry := entry
 			doRemove := func() (uint64, error) {
-				return entry.size, os.Remove(path.Join(entry.parentPath, entry.name))
+				removePath := path.Join(entry.parentPath, entry.name)
+				s.logger.Debug("deleting file from local drive", zap.String("path", removePath))
+				return entry.size, os.Remove(removePath)
 			}
 			select {
 			case result <- doRemove:
