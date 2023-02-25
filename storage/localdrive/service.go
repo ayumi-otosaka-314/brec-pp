@@ -53,6 +53,8 @@ func (s *service) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, e
 
 		for _, entry := range entries {
 			doRemove := func() (uint64, error) {
+				removePath := path.Join(entry.parentPath, entry.name)
+				s.logger.Debug("deleting file from local drive", zap.String("path", removePath))
 				return entry.size, os.Remove(path.Join(entry.parentPath, entry.name))
 			}
 			select {
