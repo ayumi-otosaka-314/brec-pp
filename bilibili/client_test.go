@@ -1,3 +1,5 @@
+//go:build testRealAPI
+
 package bilibili
 
 import (

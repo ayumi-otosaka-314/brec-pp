@@ -17,14 +17,14 @@ type Client interface {
 }
 
 type client struct {
-	logger *zap.Logger
-	client *http.Client
+	logger     *zap.Logger
+	httpClient *http.Client
 }
 
 func NewClient(logger *zap.Logger) Client {
 	return &client{
-		logger: logger,
-		client: http.DefaultClient,
+		logger:     logger,
+		httpClient: http.DefaultClient,
 	}
 }
 
@@ -39,7 +39,7 @@ func (c *client) GetLiveInfo(ctx context.Context, roomID uint64) (*LiveInfo, err
 		return nil, errors.Wrap(err, "error creating bilibili getLiveInfoByRoom request")
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "error requesting bilibili getLiveInfoByRoom endpoint")
 	}

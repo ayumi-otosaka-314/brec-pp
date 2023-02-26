@@ -20,6 +20,7 @@ func NewNotifier(
 	logger *zap.Logger,
 	webhookURL string,
 	storageSvc storage.Service,
+	biliClient bilibili.Client,
 ) notification.Service {
 	updateQueue := make(chan *updateMessage, 32)
 
@@ -28,6 +29,7 @@ func NewNotifier(
 		storageSvc:  storageSvc,
 		client:      NewClient(logger, webhookURL),
 		updateQueue: updateQueue,
+		biliClient:  biliClient,
 	}
 
 	go func() {

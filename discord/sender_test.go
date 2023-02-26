@@ -1,15 +1,18 @@
+//go:build testRealAPI
+
 package discord
 
 import (
 	"context"
-	"net/http"
 	"testing"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 
+	"github.com/ayumi-otosaka-314/brec-pp/bilibili"
 	"github.com/ayumi-otosaka-314/brec-pp/brec"
 	"github.com/ayumi-otosaka-314/brec-pp/storage"
 	"github.com/ayumi-otosaka-314/brec-pp/storage/localdrive"
@@ -18,14 +21,13 @@ import (
 const testWebhook = "REPLACE_WITH_TEST_WEBHOOK"
 
 func Test_notifier_OnRecordStart(t *testing.T) {
-	logger, _ := zap.NewProduction()
-
-	n := &notifier{
-		logger:     logger,
-		webhookURL: testWebhook,
-		storageSvc: localdrive.New(logger, "."),
-		client:     http.DefaultClient,
-	}
+	logger := zaptest.NewLogger(t)
+	n := NewNotifier(
+		logger,
+		testWebhook,
+		localdrive.New(logger, "."),
+		&dummyBiliClient{logger},
+	)
 
 	assert.NoError(t, n.OnRecordStart(
 		context.Background(),
@@ -40,12 +42,13 @@ func Test_notifier_OnRecordStart(t *testing.T) {
 }
 
 func Test_notifier_OnRecordFinish(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	n := &notifier{
-		logger:     logger,
-		webhookURL: testWebhook,
-		client:     http.DefaultClient,
-	}
+	logger := zaptest.NewLogger(t)
+	n := NewNotifier(
+		logger,
+		testWebhook,
+		localdrive.New(logger, "."),
+		&dummyBiliClient{logger},
+	)
 
 	assert.NoError(t, n.OnRecordReady(
 		context.Background(),
@@ -66,29 +69,44 @@ func Test_notifier_OnRecordFinish(t *testing.T) {
 }
 
 func Test_notifier_OnUploadFinish(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	n := &notifier{
-		logger:     logger,
-		webhookURL: testWebhook,
-		client:     http.DefaultClient,
-	}
+	logger := zaptest.NewLogger(t)
+	n := NewNotifier(
+		logger,
+		testWebhook,
+		localdrive.New(logger, "."),
+		&dummyBiliClient{logger},
+	)
 
 	assert.NoError(t, n.OnUploadComplete(
 		context.Background(),
 		time.Now(),
+		&brec.EventDataFileClose{
+			EventDataBase: brec.EventDataBase{
+				StreamerName: "テスト配信者",
+			},
+			RelativePath: "/usr/local/var/brec/test-record.flv",
+		},
 		18*time.Minute,
-		"テスト配信者",
-		"test-record.flv",
 	))
 }
 
 func Test_notifier_Alert(t *testing.T) {
-	logger, _ := zap.NewProduction()
-	n := &notifier{
-		logger:     logger,
-		webhookURL: testWebhook,
-		client:     http.DefaultClient,
-	}
+	logger := zaptest.NewLogger(t)
+	n := NewNotifier(
+		logger,
+		testWebhook,
+		localdrive.New(logger, "."),
+		&dummyBiliClient{logger},
+	)
 
-	n.Alert("test message", errors.New("test error"))
+	n.Alert(context.Background(), "test message", errors.New("test error"))
+}
+
+type dummyBiliClient struct {
+	logger *zap.Logger
+}
+
+func (d *dummyBiliClient) GetLiveInfo(ctx context.Context, roomID uint64) (*bilibili.LiveInfo, error) {
+	d.logger.Info("bilibili.Client.GetLiveInfo called", zap.Uint64("roomID", roomID))
+	return nil, errors.New("dummy client")
 }
