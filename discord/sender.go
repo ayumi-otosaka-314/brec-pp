@@ -34,7 +34,7 @@ func NewNotifier(
 
 	go func() {
 		for updateMsg := range updateQueue {
-			ctx, _ := context.WithTimeout(context.Background(), 45&time.Second)
+			ctx, _ := context.WithTimeout(context.Background(), 45*time.Second)
 			if err := n.updateImages(ctx, updateMsg); err != nil {
 				n.logger.Error("error updating image async", zap.Error(err))
 			}
