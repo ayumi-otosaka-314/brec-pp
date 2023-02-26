@@ -64,5 +64,11 @@ func (c *client) GetLiveInfo(ctx context.Context, roomID uint64) (*LiveInfo, err
 		return nil, errors.Wrap(err, "unable to decode bilibili getLiveInfoByRoom response")
 	}
 
+	if response.Code != 0 || response.Data == nil {
+		c.logger.Error("unexpected response from bilibili getLiveInfoByRoom",
+			zap.Int("response.Code", response.Code), zap.String("response.Message", response.Message))
+		return nil, errors.New("unexpected response")
+	}
+
 	return response, nil
 }
