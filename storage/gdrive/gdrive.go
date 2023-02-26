@@ -87,10 +87,11 @@ func (s *service) Receive() chan<- *brec.EventDataFileClose {
 func (s *service) doReceive() {
 	for eventData := range s.receive {
 		go func(e *brec.EventDataFileClose) {
-			if err := s.doUpload(e); err != nil {
+			ctx, _ := context.WithTimeout(context.Background(), s.timeout)
+			if err := s.doUpload(ctx, e); err != nil {
 				s.logger.Error("error uploading file", zap.Error(err),
 					zap.String("streamerName", e.StreamerName), zap.String("filePath", e.RelativePath))
-				s.notifier.Alert(fmt.Sprintf(
+				s.notifier.Alert(ctx, fmt.Sprintf(
 					"error uploading file [%s] for streamer [%s]",
 					e.RelativePath, e.StreamerName,
 				), err)
@@ -100,10 +101,9 @@ func (s *service) doReceive() {
 	s.logger.Warn("receive channel closed for google drive uploader")
 }
 
-func (s *service) doUpload(eventData *brec.EventDataFileClose) error {
+func (s *service) doUpload(ctx context.Context, eventData *brec.EventDataFileClose) error {
 	start := time.Now()
 
-	ctx, _ := context.WithTimeout(context.Background(), s.timeout)
 	driveService, err := drive.NewService(ctx, option.WithHTTPClient(s.config.Client(ctx)))
 	if err != nil {
 		return errors.Wrap(err, "unable to create google drive service")
