@@ -5,6 +5,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/ayumi-otosaka-314/brec-pp/bilibili"
 	"github.com/ayumi-otosaka-314/brec-pp/config"
 	"github.com/ayumi-otosaka-314/brec-pp/discord"
 	"github.com/ayumi-otosaka-314/brec-pp/handler"
@@ -29,7 +30,15 @@ func New(conf *config.Root) *Registry {
 }
 
 func NewLogger() *zap.Logger {
-	logger, _ := zap.NewProduction()
+	cfg := zap.NewProductionConfig()
+	cfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	logger, err := cfg.Build(
+		zap.AddStacktrace(zap.WarnLevel),
+		zap.AddCaller(),
+	)
+	if err != nil {
+		panic(err)
+	}
 	return logger
 }
 
@@ -61,6 +70,10 @@ func (r *Registry) NewServiceRegistry() streamer.ServiceRegistry {
 	}
 }
 
+func (r *Registry) newBiliClient() bilibili.Client {
+	return bilibili.NewClient(r.logger)
+}
+
 type serviceRegistry struct {
 	mapping      map[uint64]*serviceEntry
 	defaultEntry *serviceEntry
@@ -78,6 +91,7 @@ func (r *Registry) newServiceEntry(conf config.ServiceEntry) *serviceEntry {
 		r.logger,
 		conf.Discord.WebhookURL,
 		localStorage,
+		r.newBiliClient(),
 	)
 	return &serviceEntry{
 		notifier:     notifier,

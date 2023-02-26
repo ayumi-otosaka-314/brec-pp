@@ -74,7 +74,7 @@ func NewNotifyRecordUploadHandler(
 				); err != nil {
 					logger.Error("error cleaning local storage", zap.Error(err))
 					streamerServiceRegistry.GetNotifier(eventData.RoomID).
-						Alert("error cleaning local storage", err)
+						Alert(ctx, "error cleaning local storage", err)
 				}
 			}(eventData)
 		case brec.EventTypeFileClosed:
@@ -84,10 +84,10 @@ func NewNotifyRecordUploadHandler(
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			
+
 			if err = streamerServiceRegistry.
 				GetNotifier(eventData.RoomID).
-				OnRecordFinish(rootCtx, eventTime, eventData); err != nil {
+				OnRecordReady(rootCtx, eventTime, eventData); err != nil {
 				logger.Warn("error notifying on record finish; continue to upload", zap.Error(err))
 			}
 

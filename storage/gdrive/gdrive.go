@@ -87,10 +87,11 @@ func (s *service) Receive() chan<- *brec.EventDataFileClose {
 func (s *service) doReceive() {
 	for eventData := range s.receive {
 		go func(e *brec.EventDataFileClose) {
-			if err := s.doUpload(e.StreamerName, e.RelativePath, e.FileSize); err != nil {
+			ctx, _ := context.WithTimeout(context.Background(), s.timeout)
+			if err := s.doUpload(ctx, e); err != nil {
 				s.logger.Error("error uploading file", zap.Error(err),
 					zap.String("streamerName", e.StreamerName), zap.String("filePath", e.RelativePath))
-				s.notifier.Alert(fmt.Sprintf(
+				s.notifier.Alert(ctx, fmt.Sprintf(
 					"error uploading file [%s] for streamer [%s]",
 					e.RelativePath, e.StreamerName,
 				), err)
@@ -100,10 +101,9 @@ func (s *service) doReceive() {
 	s.logger.Warn("receive channel closed for google drive uploader")
 }
 
-func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) error {
+func (s *service) doUpload(ctx context.Context, eventData *brec.EventDataFileClose) error {
 	start := time.Now()
 
-	ctx, _ := context.WithTimeout(context.Background(), s.timeout)
 	driveService, err := drive.NewService(ctx, option.WithHTTPClient(s.config.Client(ctx)))
 	if err != nil {
 		return errors.Wrap(err, "unable to create google drive service")
@@ -111,7 +111,7 @@ func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) e
 
 	if err = storage.EnsureCapacity(
 		ctx,
-		s.reservedCapacity+fileSize,
+		s.reservedCapacity+eventData.FileSize,
 		&cleaner{
 			logger:         s.logger,
 			driveService:   driveService,
@@ -121,11 +121,11 @@ func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) e
 		return errors.Wrap(err, "unable to ensure capacity")
 	}
 
-	uploadFile, err := os.Open(path.Join(s.localRootPath, relativePath))
+	uploadFile, err := os.Open(path.Join(s.localRootPath, eventData.RelativePath))
 	if err != nil {
 		return errors.Wrap(err, "unable to open uploadFile file")
 	}
-	fileName := path.Base(relativePath)
+	fileName := path.Base(eventData.RelativePath)
 	if _, err = driveService.Files.
 		Create(&drive.File{
 			Name:    fileName,
@@ -137,7 +137,7 @@ func (s *service) doUpload(streamerName, relativePath string, fileSize uint64) e
 		return errors.Wrap(err, "unable to uploadFile")
 	}
 
-	return s.notifier.OnUploadComplete(ctx, time.Now(), time.Since(start), streamerName, fileName)
+	return s.notifier.OnUploadComplete(ctx, time.Now(), eventData, time.Since(start))
 }
 
 func (s *service) logUploadProgress(fileName string) googleapi.ProgressUpdater {
