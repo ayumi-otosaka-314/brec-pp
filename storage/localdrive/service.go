@@ -43,6 +43,12 @@ func (s *service) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, e
 		return nil, err
 	}
 
+	// do not delete the actual rootPath
+	if len(entries) > 0 &&
+		entries[0].name == "" && entries[0].parentPath == s.rootPath {
+		entries = entries[1:]
+	}
+
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].lastModified.Before(entries[j].lastModified)
 	})
@@ -75,8 +81,13 @@ func (s *service) GetRemovables(ctx context.Context) (<-chan storage.DoRemove, e
 type fileEntry struct {
 	size         uint64
 	lastModified time.Time
-	parentPath   string
-	name         string
+
+	// parentPath is the parent path of the entry to be deleted.
+	parentPath string
+
+	// name is the file name of the entry to be deleted.
+	// It will be empty if the parent path itself should be deleted.
+	name string
 }
 
 func (s *service) traverse(root string, depth int, result *[]*fileEntry) error {
@@ -87,6 +98,20 @@ func (s *service) traverse(root string, depth int, result *[]*fileEntry) error {
 	files, err := os.ReadDir(root)
 	if err != nil {
 		return errors.Wrap(err, "unable to read dir")
+	}
+
+	if len(files) == 0 {
+		status, err := os.Lstat(root)
+		if err != nil {
+			return errors.Wrap(err, "unable to get dir status")
+		}
+		*result = append(*result, &fileEntry{
+			size:         0,
+			lastModified: status.ModTime(),
+			parentPath:   root,
+			name:         "",
+		})
+		return nil
 	}
 
 	for _, file := range files {
