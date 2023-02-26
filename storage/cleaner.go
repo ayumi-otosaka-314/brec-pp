@@ -53,10 +53,11 @@ func doEnsureCapacity(parentCtx context.Context, cleanTarget uint64, cleaner Cle
 			return errors.Wrap(err, "error removing object; stopping")
 		}
 
-		cleanTarget -= clearedSize
-		if cleanTarget <= 0 {
+		// check before performing subtraction, to prevent overflow of uint64.
+		if clearedSize >= cleanTarget {
 			return nil
 		}
+		cleanTarget -= clearedSize
 	}
 	return nil
 }
