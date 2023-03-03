@@ -3,8 +3,9 @@ package config
 import "time"
 
 type Root struct {
-	Server   Server          `mapstructure:"server" validate:"required"`
-	Services ServiceRegistry `mapstructure:"services" validate:"required"`
+	Server       Server          `mapstructure:"server" validate:"required"`
+	LocalStorage LocalStorage    `mapstructure:"localStorage" validate:"required"`
+	Services     ServiceRegistry `mapstructure:"services" validate:"required"`
 }
 
 type Server struct {
@@ -17,14 +18,20 @@ type HandlerPaths struct {
 	RecordUpload string `mapstructure:"recordUpload" validate:"required"`
 }
 
+type LocalStorage struct {
+	RootPath         string        `mapstructure:"rootPath" validate:"required"`
+	CleanInterval    time.Duration `mapstructure:"cleanInterval" validate:"required"`
+	ReservedCapacity uint64        `mapstructure:"reservedCapacity" validate:"required"`
+}
+
 type ServiceRegistry struct {
 	Default   ServiceEntry           `mapstructure:"default" validate:"required"`
 	Streamers []StreamerServiceEntry `mapstructure:"streamers"`
 }
 
 type ServiceEntry struct {
-	Discord Discord `mapstructure:"discord" validate:"required"`
-	Storage Storage `mapstructure:"storage" validate:"required"`
+	Notification Notification `mapstructure:"notification" validate:"required"`
+	Upload       Upload       `mapstructure:"upload" validate:"required"`
 }
 
 type StreamerServiceEntry struct {
@@ -32,12 +39,15 @@ type StreamerServiceEntry struct {
 	ServiceEntry `mapstructure:",squash" validate:"required"`
 }
 
+type Notification struct {
+	Discord Discord `mapstructure:"discord" validate:"required"`
+}
+
 type Discord struct {
 	WebhookURL string `mapstructure:"webhookUrl" validate:"required,url"`
 }
 
-type Storage struct {
-	RootPath    string      `mapstructure:"rootPath" validate:"required,dir"`
+type Upload struct {
 	GoogleDrive GoogleDrive `mapstructure:"googleDrive" validate:"required"`
 }
 

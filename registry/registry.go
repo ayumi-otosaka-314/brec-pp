@@ -10,7 +10,6 @@ import (
 	"github.com/ayumi-otosaka-314/brec-pp/discord"
 	"github.com/ayumi-otosaka-314/brec-pp/handler"
 	"github.com/ayumi-otosaka-314/brec-pp/notification"
-	"github.com/ayumi-otosaka-314/brec-pp/storage"
 	"github.com/ayumi-otosaka-314/brec-pp/storage/gdrive"
 	"github.com/ayumi-otosaka-314/brec-pp/storage/localdrive"
 	"github.com/ayumi-otosaka-314/brec-pp/streamer"
@@ -18,14 +17,17 @@ import (
 )
 
 type Registry struct {
-	conf   *config.Root
-	logger *zap.Logger
+	conf         *config.Root
+	logger       *zap.Logger
+	localStorage localdrive.Service
 }
 
 func New(conf *config.Root) *Registry {
+	logger := NewLogger()
 	return &Registry{
-		conf:   conf,
-		logger: NewLogger(),
+		conf:         conf,
+		logger:       logger,
+		localStorage: NewLocalStorage(logger, &conf.LocalStorage),
 	}
 }
 
@@ -42,6 +44,15 @@ func NewLogger() *zap.Logger {
 	return logger
 }
 
+func NewLocalStorage(logger *zap.Logger, conf *config.LocalStorage) localdrive.Service {
+	return localdrive.New(
+		logger,
+		conf.RootPath,
+		conf.CleanInterval,
+		conf.ReservedCapacity,
+	)
+}
+
 func (r *Registry) NewServer() *handler.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc(
@@ -49,6 +60,7 @@ func (r *Registry) NewServer() *handler.Server {
 		handler.NewNotifyRecordUploadHandler(
 			r.logger,
 			r.conf.Server.Timeout,
+			r.localStorage,
 			r.NewServiceRegistry(),
 		),
 	)
@@ -62,11 +74,11 @@ func (r *Registry) CleanUp() {
 func (r *Registry) NewServiceRegistry() streamer.ServiceRegistry {
 	mapping := make(map[uint64]*serviceEntry, len(r.conf.Services.Streamers))
 	for _, entry := range r.conf.Services.Streamers {
-		mapping[entry.RoomID] = r.newServiceEntry(entry.ServiceEntry)
+		mapping[entry.RoomID] = r.newServiceEntry(entry.ServiceEntry, r.conf.LocalStorage.RootPath)
 	}
 	return &serviceRegistry{
 		mapping:      mapping,
-		defaultEntry: r.newServiceEntry(r.conf.Services.Default),
+		defaultEntry: r.newServiceEntry(r.conf.Services.Default, r.conf.LocalStorage.RootPath),
 	}
 }
 
@@ -80,26 +92,23 @@ type serviceRegistry struct {
 }
 
 type serviceEntry struct {
-	notifier     notification.Service
-	localStorage storage.Cleaner
-	uploader     upload.Service
+	notifier notification.Service
+	uploader upload.Service
 }
 
-func (r *Registry) newServiceEntry(conf config.ServiceEntry) *serviceEntry {
-	localStorage := localdrive.New(r.logger, conf.Storage.RootPath)
+func (r *Registry) newServiceEntry(conf config.ServiceEntry, localRootPath string) *serviceEntry {
 	notifier := discord.NewNotifier(
 		r.logger,
-		conf.Discord.WebhookURL,
-		localStorage,
+		conf.Notification.Discord.WebhookURL,
+		r.localStorage,
 		r.newBiliClient(),
 	)
 	return &serviceEntry{
-		notifier:     notifier,
-		localStorage: localStorage,
+		notifier: notifier,
 		uploader: gdrive.NewUploadService(
 			r.logger,
-			&conf.Storage.GoogleDrive,
-			conf.Storage.RootPath,
+			&conf.Upload.GoogleDrive,
+			localRootPath,
 			notifier,
 		),
 	}
@@ -107,10 +116,6 @@ func (r *Registry) newServiceEntry(conf config.ServiceEntry) *serviceEntry {
 
 func (s *serviceRegistry) GetNotifier(roomID uint64) notification.Service {
 	return s.getServiceEntry(roomID).notifier
-}
-
-func (s *serviceRegistry) GetLocalStorage(roomID uint64) storage.Cleaner {
-	return s.getServiceEntry(roomID).localStorage
 }
 
 func (s *serviceRegistry) GetUploader(roomID uint64) upload.Service {

@@ -4,12 +4,17 @@ server:
   paths:
     recordUpload: "/upload"
 
+localStorage:
+  rootPath: "/var"
+  cleanInterval: 20m
+  reservedCapacity: 2147483648 # 2.0 GB
+
 services:
   default:
-    discord:
-      webhookUrl: "https://discord.com/your_webhook"
-    storage:
-      rootPath: "/var"
+    notification:
+      discord:
+        webhookUrl: "https://discord.com/your_webhook"
+    upload:
       googleDrive:
         timeout: 30m
         credentialPath: "./config/example-credential.json"
@@ -17,10 +22,10 @@ services:
         parentFolderId: "parent_folder_id"
   streamers:
     - roomId: 1001 # test room id
-      discord:
-        webhookUrl: "https://discord.com/your_webhook"
-      storage:
-        rootPath: "/var"
+      notification:
+        discord:
+          webhookUrl: "https://discord.com/your_webhook"
+      upload:
         googleDrive:
           timeout: 30m
           credentialPath: "./config/example-credential.json"

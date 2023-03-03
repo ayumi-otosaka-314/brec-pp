@@ -14,13 +14,68 @@ import (
 	"github.com/ayumi-otosaka-314/brec-pp/storage"
 )
 
-type service struct {
-	rootPath string
-	logger   *zap.Logger
+type Service interface {
+	AsyncClean(ctx context.Context, traverseDepth int) error
+
+	storage.Service
 }
 
-func New(logger *zap.Logger, rootPath string) storage.Cleaner {
-	return &service{rootPath: rootPath, logger: logger}
+type service struct {
+	logger       *zap.Logger
+	rootPath     string
+	cleanSignals chan int
+}
+
+func New(
+	logger *zap.Logger,
+	rootPath string,
+	cleanInterval time.Duration,
+	reservedCapacity uint64,
+) Service {
+	s := &service{
+		logger:       logger,
+		rootPath:     rootPath,
+		cleanSignals: make(chan int, 16),
+	}
+
+	go s.doClean(cleanInterval, reservedCapacity)
+
+	return s
+}
+
+func (s *service) AsyncClean(ctx context.Context, traverseDepth int) error {
+	select {
+	case s.cleanSignals <- traverseDepth:
+		return nil
+	case <-ctx.Done():
+		return errors.Wrap(ctx.Err(), "unable to async clean")
+	}
+}
+
+func (s *service) doClean(
+	cleanInterval time.Duration,
+	reservedCapacity uint64,
+) {
+	timer := time.NewTimer(cleanInterval)
+	for {
+		ctx := context.Background()
+		select {
+		case <-timer.C:
+			// No op
+		case traverseDepth := <-s.cleanSignals:
+			ctx = WithTraverseDepth(ctx, traverseDepth)
+			if !timer.Stop() {
+				<-timer.C
+			}
+		}
+
+		timer.Reset(cleanInterval)
+
+		ctx, _ = context.WithTimeout(ctx, cleanInterval)
+		if err := storage.EnsureCapacity(ctx, reservedCapacity, s); err != nil {
+			s.logger.Error("error ensure local storage capacity", zap.Error(err))
+		}
+	}
 }
 
 func (s *service) GetAvailableCapacity() (uint64, error) {
