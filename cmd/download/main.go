@@ -110,12 +110,12 @@ func doDownload(ctx context.Context, srv *drive.Service, driveFile *drive.File) 
 	}
 	defer file.Close()
 
-	log.Println("start downloading")
+	log.Printf("start downloading: %s\n", driveFile.Name)
 	bytesRead, err := file.ReadFrom(resp.Body)
 	if err != nil {
 		return errors.Wrap(err, "error writing content")
 	}
-	log.Printf("Download completed; %d bytes transferred", bytesRead)
+	log.Printf("Download %s completed; %d bytes transferred", driveFile.Name, bytesRead)
 	resp.Body.Close()
 
 	if driveChecksum := driveFile.Sha256Checksum; driveChecksum != "" {
@@ -127,7 +127,9 @@ func doDownload(ctx context.Context, srv *drive.Service, driveFile *drive.File) 
 		}
 		localChecksum := hex.EncodeToString(hasher.Sum(nil))
 		if driveChecksum != localChecksum {
-			return errors.Errorf("sha256 mismatch; gdrive [%s]; local [%s]", driveChecksum, localChecksum)
+			return errors.Errorf(
+				"sha256 mismatch for file [%s]; gdrive [%s]; local [%s]",
+				driveFile.Name, driveChecksum, localChecksum)
 		}
 	}
 
