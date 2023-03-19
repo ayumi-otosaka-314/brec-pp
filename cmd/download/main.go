@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/pkg/errors"
 	"golang.org/x/oauth2/jwt"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
@@ -46,7 +48,7 @@ func main() {
 	ctx := context.Background()
 
 	credentialPath := flag.String("credential", "", "path to the credential json file")
-	fileName := flag.String("fileName", "", "name of the file to download")
+	nameContains := flag.String("nameContains", "", "keyword in name for search")
 
 	flag.Parse()
 
@@ -55,8 +57,8 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	if *fileName == "" {
-		log.Println("fileName is required")
+	if *nameContains == "" {
+		log.Println("keyword in name for search is required")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -69,7 +71,7 @@ func main() {
 
 	r, err := srv.Files.
 		List().
-		Q(fmt.Sprintf("name = '%s'", *fileName)).
+		Q(fmt.Sprintf("name contains '%s'", *nameContains)).
 		PageSize(10).
 		Fields("files(id, name, sha256Checksum)").
 		Do()
@@ -78,45 +80,56 @@ func main() {
 	}
 	if len(r.Files) == 0 {
 		log.Fatalln("No files found.")
-	} else if len(r.Files) > 1 {
-		for _, i := range r.Files {
-			log.Printf("%s (%s)", i.Name, i.Id)
-		}
-		os.Exit(1)
 	}
-	fileID := r.Files[0].Id
 
-	resp, err := srv.Files.Get(fileID).Download()
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(4)
+
+	for _, f := range r.Files {
+		file := f
+		g.Go(func() error {
+			return doDownload(gCtx, srv, file)
+		})
+	}
+
+	if err = g.Wait(); err != nil {
+		log.Fatalf("error downloading file: %+v", err)
+	}
+}
+
+func doDownload(ctx context.Context, srv *drive.Service, driveFile *drive.File) error {
+	resp, err := srv.Files.Get(driveFile.Id).Context(ctx).Download()
 	if err != nil {
-		log.Fatalf("error downloading file: %+v\n", err)
+		return errors.Wrap(err, "error downloading file")
 	}
 	defer resp.Body.Close()
 
-	file, err := os.Create(*fileName)
+	file, err := os.Create(driveFile.Name)
 	if err != nil {
-		log.Fatalf("error create file for download: %+v\n", err)
+		return errors.Wrap(err, "error create file for download")
 	}
 	defer file.Close()
 
 	log.Println("start downloading")
 	bytesRead, err := file.ReadFrom(resp.Body)
 	if err != nil {
-		log.Fatalf("error writing content: %+v\n", err)
+		return errors.Wrap(err, "error writing content")
 	}
 	log.Printf("Download completed; %d bytes transferred", bytesRead)
 	resp.Body.Close()
 
-	if r.Files[0].Sha256Checksum != "" {
+	if driveChecksum := driveFile.Sha256Checksum; driveChecksum != "" {
 		hasher := sha256.New()
 
 		_, _ = file.Seek(0, io.SeekStart)
 		if _, err = io.Copy(hasher, file); err != nil {
-			log.Fatalf("unable to check sha256 of file written: %+v", err)
+			return errors.Wrap(err, "unable to check sha256 of file written")
 		}
-		gdriveChecksum := r.Files[0].Sha256Checksum
 		localChecksum := hex.EncodeToString(hasher.Sum(nil))
-		if gdriveChecksum != localChecksum {
-			log.Fatalf("sha256 mismatch; gdrive [%s]; local [%s]", gdriveChecksum, localChecksum)
+		if driveChecksum != localChecksum {
+			return errors.Errorf("sha256 mismatch; gdrive [%s]; local [%s]", driveChecksum, localChecksum)
 		}
 	}
+
+	return nil
 }
