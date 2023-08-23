@@ -4,45 +4,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/pkg/errors"
-	"golang.org/x/oauth2/jwt"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
-)
 
-func ServiceAccount(credentialFile string) *http.Client {
-	b, err := os.ReadFile(credentialFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var c = struct {
-		PrivateKeyID string `json:"private_key_id"`
-		PrivateKey   string `json:"private_key"`
-		ClientEmail  string `json:"client_email"`
-		TokenURI     string `json:"token_uri"`
-	}{}
-	if err = json.Unmarshal(b, &c); err != nil {
-		log.Fatalf("unable to unmarshal credential json: %+v", err)
-	}
-	config := &jwt.Config{
-		PrivateKeyID: c.PrivateKeyID,
-		PrivateKey:   []byte(c.PrivateKey),
-		Email:        c.ClientEmail,
-		Scopes:       []string{drive.DriveScope},
-		TokenURL:     c.TokenURI,
-	}
-	client := config.Client(context.Background())
-	return client
-}
+	"github.com/ayumi-otosaka-314/brec-pp/cmd"
+)
 
 func main() {
 	ctx := context.Background()
@@ -63,10 +37,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := ServiceAccount(*credentialPath)
+	client := cmd.ServiceAccount(*credentialPath)
 	srv, err := drive.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
-		log.Fatalf("Unable to retrieve Drive client: %+v", err)
+		log.Fatalf("unable to retrieve Drive client: %+v", err)
 	}
 
 	r, err := srv.Files.
@@ -76,10 +50,10 @@ func main() {
 		Fields("files(id, name, sha256Checksum)").
 		Do()
 	if err != nil {
-		log.Fatalf("Unable to retrieve files: %v", err)
+		log.Fatalf("unable to retrieve files: %v", err)
 	}
 	if len(r.Files) == 0 {
-		log.Fatalln("No files found.")
+		log.Fatalln("no files found")
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
