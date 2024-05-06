@@ -21,7 +21,7 @@ type DoRemove func() (uint64, error)
 
 func EnsureCapacity(ctx context.Context, targetCapacity uint64, cleaner Cleaner) error {
 	const allowedIterations = 5
-	for i := 0; i < allowedIterations; i++ {
+    for range allowedIterations {
 		availCapacity, err := cleaner.GetAvailableCapacity()
 		if err != nil {
 			return errors.Wrap(err, "unable to check available bytes")
